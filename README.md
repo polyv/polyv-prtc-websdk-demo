@@ -5,6 +5,15 @@
 yarn install
 ```
 
+## Create app.js
+
+add file `app.js` in `src/config`, and enter
+
+```js
+export const appId = 'xxxx-xxxxxxxx';
+export const appKey = 'yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy';
+```
+
 ### Compiles and hot-reloads for development
 ```
 yarn serve
