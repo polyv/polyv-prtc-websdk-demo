@@ -158,6 +158,7 @@ export default {
 
         &.streams-1 {
           .stream {
+            max-width: 100%;
             max-height: 100%;
           }
         }
