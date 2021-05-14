@@ -41,6 +41,13 @@ class RTC {
             })
           })
       })
+      .catch((err) => {
+        console.log('初始化本地流失败', err)
+        this.vm && this.vm.$notify.error({
+          title: '初始化本地流失败',
+          message: `${err}`
+        })
+      })
   }
   leave() {
     if (!this.isJoined) return
@@ -59,18 +66,7 @@ class RTC {
   initLocalStream() {
     const stream = createStream({audio: true, video: true, screen: false})
     this.localStream = stream
-    return stream.init()
-      .catch((err) => {
-        // todo - notify
-        console.log('初始化本地流失败', err)
-        this.vm && this.vm.$notify.error({
-          title: '初始化本地流失败',
-          message: `${err}`
-        })
-      })
-      .then(() => {
-        return stream
-      })
+    return stream.init().then(() => { return stream })
   }
   publish() {
     if (!this.localStream) {
@@ -89,6 +85,13 @@ class RTC {
                 message: `${err}`
               })
             })
+        })
+        .catch((err) => {
+          console.log('初始化本地流失败', err)
+          this.vm && this.vm.$notify.error({
+            title: '初始化本地流失败',
+            message: `${err}`
+          })
         })
     } else {
       this.client
