@@ -1,5 +1,5 @@
 import { appId, appKey } from './config'
-import { createClient, createStream, generateToken } from '../lib'
+import { createClient, createStream, generateToken, version } from '../lib'
 
 let instance = undefined
 
@@ -16,19 +16,19 @@ class RTC {
   vm = undefined
 
   join(channel, username) {
-    if (this.isJoined) return
+    if (this.isJoined) return Promise.resolve()
     this.bindEvents()
-    this.initLocalStream()
+    return this.initLocalStream()
       .then((stream) => {
         const token = generateToken(appId, appKey, channel, username)
-        this.client
-          .join(channel, username, token)
+        return this.client
+          .join(channel, username, token, {type: 'live'})
           .then(() => {
             console.log('加入房间成功')
             this.isJoined = true
 
             this.vm && this.vm.$nextTick(() => {
-              stream.play('local-stream')
+              stream.play(stream.id)
             })
             // 自动发布
             this.publish()
@@ -47,6 +47,7 @@ class RTC {
           title: '初始化本地流失败',
           message: `${err}`
         })
+        throw err
       })
   }
   leave() {
@@ -72,7 +73,9 @@ class RTC {
     if (!this.localStream) {
       this.initLocalStream()
         .then((stream) => {
-          stream.play('local-stream')
+          this.vm && this.vm.$nextTick(() => {
+            stream.play(stream.id)
+          })
           this.client
             .publish(stream)
             .then(() => {
@@ -221,4 +224,8 @@ export function getRTCInstance(vm) {
   }
   instance.vm = vm
   return instance
+}
+
+export {
+  version
 }

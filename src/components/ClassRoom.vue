@@ -1,5 +1,5 @@
 <template>
-  <div class="prtc-container">
+  <div class="rtc-container">
     <el-card v-if="!rtc.isJoined" class="box-card">
       <div slot="header" class="clearfix">
         <span>加入频道</span>
@@ -21,12 +21,17 @@
     </el-card>
     <el-container v-if="rtc.isJoined">
       <el-header class="status-bar">频道号：{{form.channel}}</el-header>
-      <el-container class="stream-container">
-        <el-main :class="['remote', `streams-${rtc.remoteStreams.length}`]" style="padding: 0;">
-          <div :id="stream.id" :key="stream.id" v-for="stream in rtc.remoteStreams" class="stream"></div>
+      <el-container class="main-container">
+        <el-main class="main-panel">
+          <video v-if="chosenStream" muted autoplay ref="display"></video>
         </el-main>
-        <el-aside class="local">
-          <div id="local-stream" class="stream local"></div>
+        <el-aside class="streams-container">
+          <div class="local-streams">
+            <Stream :stream="rtc.localStream" v-on:choose-stream="onChooseStream"></Stream>
+          </div>
+          <div class="remote-streams">
+            <Stream :stream="stream" :key="stream.id" v-for="stream in rtc.remoteStreams" v-on:choose-stream="onChooseStream"></Stream>
+          </div>
         </el-aside>
       </el-container>
       <el-footer class="menu-bar">
@@ -39,13 +44,16 @@
 
 <script>
 import { loadStore, saveStore } from '../store/sessionStore'
-import { version } from '../../lib'
-import { getRTCInstance } from '../rtc'
+import { getRTCInstance, version } from '../rtc'
+import Stream from './Stream.vue'
 
 export default {
+  components: {
+    Stream
+  },
   data() {
-    const rtc = getRTCInstance(this);
-    const store = loadStore();
+    const rtc = getRTCInstance(this)
+    const store = loadStore()
     // 自动加入房间
     // if (store.channel && store.username) {
     //   rtc.join(store.channel, store.username)
@@ -65,8 +73,19 @@ export default {
           { min: 2, max: 20, message: '长度在 2 到 20 个字符', trigger: 'blur' }
         ]
       },
+      chosenStream: null,
       rtc,
       version,
+    }
+  },
+  watch: {
+    chosenStream: function () {
+      this.$nextTick(() => {
+        const display = this.$refs['display']
+        if (this.chosenStream) {
+          display.srcObject = this.chosenStream.mediaStream
+        }
+      })
     }
   },
   methods: {
@@ -78,27 +97,43 @@ export default {
             username: this.form.username
           }
           saveStore(data)
-          this.rtc.join(this.form.channel, this.form.username)
+          this.rtc
+            .join(this.form.channel, this.form.username)
+            .then(() => {
+              this.chosenStream = this.rtc.localStream
+            })
+            .catch((err) => {
+              console.error('加入房间失败', err)
+            })
         }
       })
     },
     onPub() {
       if (this.rtc.localStream) {
+        if (this.chosenStream === this.rtc.localStream) {
+          this.chosenStream = null
+        }
         this.rtc.unpublish()
       } else {
         this.rtc.publish()
+        if (!this.chosenStream) {
+          this.chosenStream = this.rtc.localStream
+        }
       }
     },
     onLeave() {
       this.rtc.leave()
-    }
+    },
+    onChooseStream: function(stream) {
+      this.chosenStream = stream
+    },
   }
 }
 </script>
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style lang="less">
-  .prtc-container {
+  .rtc-container {
     display: flex;
     flex: 1;
 
@@ -136,91 +171,42 @@ export default {
       }
     }
 
-    .stream-container {
+    .main-container {
+      display: flex;
+      width: 100%;
       height: calc(100% - 120px);
 
-      .stream {
-        flex: 1;
-        min-width: 300px;
-      }
-
-      .remote {
-        display: flex;
-        flex-direction: row;
-        flex-wrap: wrap;
+      .main-panel {
+        padding: 0;
+        height: 100%;
         background-color: #000;
-        overflow: auto;
-
-        .stream {
-          max-width: 20%;
-          max-height: 20%;
-        }
-
-        &.streams-1 {
-          .stream {
-            max-width: 100%;
-            max-height: 100%;
-          }
-        }
-        &.streams-2,
-        &.streams-3,
-        &.streams-4 {
-          .stream {
-            max-width: 50%;
-            max-height: 50%;
-          }
-        }
-        &.streams-5,
-        &.streams-6 {
-          .stream {
-            max-width: 50%;
-            max-height: 30%;
-          }
-        }
-        &.streams-7,
-        &.streams-8,
-        &.streams-9 {
-          .stream {
-            max-width: 30%;
-            max-height: 30%;
-          }
+        border-radius: 4px;
+        overflow: hidden;
+        video {
+          width: 100%;
+          height: 100%;
         }
       }
-      @media screen and (min-width: 720px) and (max-width: 799px) {
-        .remote {
-          .stream {
-            min-width: 200px;
-          }
-        }
-      }
-      @media screen and (min-width: 800px) and (max-width: 899px) {
-        .remote {
-          .stream {
-            min-width: 250px;
-          }
-        }
-      }
-      @media screen and (min-width: 900px) and (max-width: 1199px) {
-        .remote {
-          .stream {
-            min-width: 300px;
-          }
-        }
-      }
-      @media screen and (min-width: 1200px) {
-        .remote {
-          .stream {
-            min-width: 450px;
-          }
-        }
-      }
-
-      .local {
+      .streams-container {
         display: flex;
-        background-color: #333;
         flex-direction: column;
-        .stream {
-          max-height: 200px;
+        height: 100%;
+        padding:0 4px;
+        .local-streams,
+        .remote-streams {
+          display: flex;
+          flex-direction: column;
+          padding: 0 4px;
+        }
+        .local-streams {
+          height: 210px;
+        }
+        .remote-streams {
+          margin-top: 10px;
+          overflow-y: auto;
+          .stream {
+            margin-bottom: 4px;
+          }
         }
       }
     }

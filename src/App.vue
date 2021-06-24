@@ -1,6 +1,6 @@
 <template>
   <div id="app">
-    <ClassRoom msg="Welcome to PRTC Demo"/>
+    <ClassRoom msg="Welcome to WebRTC Demo"/>
   </div>
 </template>
 
