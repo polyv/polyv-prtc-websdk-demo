@@ -1,26 +1,15 @@
 <template>
-  <div class="rtc-container">
-    <el-card v-if="!rtc.isJoined" class="box-card">
-      <div slot="header" class="clearfix">
-        <span>加入频道</span>
-      </div>
-      <div class="box-body">
-        <el-form ref="form" :model="form" :rules="rules" label-width="80px" label-position="top">
-          <el-form-item label="频道号" prop="channel">
-            <el-input v-model="form.channel"></el-input>
-          </el-form-item>
-          <el-form-item label="用户名" prop="username">
-            <el-input v-model="form.username"></el-input>
-          </el-form-item>
-          <el-form-item style="margin-top: 46px;">
-            <el-button class="btn-submit"  type="primary" @click="onSubmit">立即加入</el-button>
-          </el-form-item>
-        </el-form>
-        <div class="text right small">sdk version: {{version}}</div>
-      </div>
-    </el-card>
-    <el-container v-if="rtc.isJoined">
-      <el-header class="status-bar">频道号：{{form.channel}}</el-header>
+  <div class="rtc-container"
+    v-loading="isIniting"
+    element-loading-text="正在初始化..."
+    element-loading-spinner="el-icon-loading"
+    element-loading-background="rgba(0, 0, 0, 0.8)"
+    >
+    <el-container>
+      <el-header class="status-bar">
+        <div class="room-id">频道号：{{channel}}</div>
+        <Status/>
+      </el-header>
       <el-container class="main-container">
         <el-main class="main-panel">
           <video v-if="chosenStream" muted autoplay ref="display"></video>
@@ -30,7 +19,7 @@
             <Stream :stream="rtc.localStream" v-on:choose-stream="onChooseStream"></Stream>
           </div>
           <div class="remote-streams">
-            <Stream :stream="stream" :key="stream.id" v-for="stream in rtc.remoteStreams" v-on:choose-stream="onChooseStream"></Stream>
+            <Stream :stream="stream" :key="stream.id" v-for="stream in rtc.remoteStreams" v-on:choose-stream="onChooseStream" v-on:reload-chosen-stream="reloadChosenStream"></Stream>
           </div>
         </el-aside>
       </el-container>
@@ -43,36 +32,49 @@
 </template>
 
 <script>
-import { loadStore, saveStore } from '../store/sessionStore'
+import { loadStore } from '../store/sessionStore'
 import { getRTCInstance, version } from '../rtc'
 import Stream from './Stream.vue'
+import Status from './Status.vue'
 
 export default {
   components: {
-    Stream
+    Stream,
+    Status,
   },
   data() {
     const rtc = getRTCInstance(this)
     const store = loadStore()
-    // 自动加入房间
-    // if (store.channel && store.username) {
-    //   rtc.join(store.channel, store.username)
-    // }
+    if (!rtc.isJoined || !store.channel || !store.username) {
+      rtc.leave()
+        .catch((err) => {
+          console.error('返回异常 ', err)
+        })
+      this.$router.replace('/')
+    } else {
+      // 自动发布
+      rtc.publish()
+        .then(() => {
+          this.isIniting = false
+        })
+        .catch((err) => {
+          this.$notify.error({
+            title: '发布失败',
+            message: `${err}`
+          })
+        })
+      const localStream = rtc.localStream
+      this.$nextTick(() => {
+        if (localStream) {
+          this.chosenStream = localStream
+          localStream.play(localStream.id)
+        }
+      })
+    }
     return {
-      form: {
-        channel: store.channel || '',
-        username: store.username || '',
-      },
-      rules: {
-        channel: [
-          { required: true, message: '请输入频道号', trigger: 'blur' },
-          { min: 2, max: 10, message: '长度在 2 到 10 个字符', trigger: 'blur' }
-        ],
-        username: [
-          { required: true, message: '请输入用户名', trigger: 'blur' },
-          { min: 2, max: 20, message: '长度在 2 到 20 个字符', trigger: 'blur' }
-        ]
-      },
+      channel: store.channel || '',
+      username: store.username || '',
+      isIniting: true,
       chosenStream: null,
       rtc,
       version,
@@ -89,43 +91,54 @@ export default {
     }
   },
   methods: {
-    onSubmit() {
-      this.$refs['form'].validate((valid) => {
-        if (valid) {
-          const data = {
-            channel: this.form.channel,
-            username: this.form.username
-          }
-          saveStore(data)
-          this.rtc
-            .join(this.form.channel, this.form.username)
-            .then(() => {
-              this.chosenStream = this.rtc.localStream
-            })
-            .catch((err) => {
-              console.error('加入房间失败', err)
-            })
-        }
-      })
-    },
     onPub() {
       if (this.rtc.localStream) {
         if (this.chosenStream === this.rtc.localStream) {
           this.chosenStream = null
         }
-        this.rtc.unpublish()
+        this.rtc
+          .unpublish()
+          .catch((err) => {
+            this.$notify.error({
+              title: '取消发布失败',
+              message: `${err}`
+            })
+          })
       } else {
-        this.rtc.publish()
-        if (!this.chosenStream) {
-          this.chosenStream = this.rtc.localStream
-        }
+        this.rtc
+          .publish()
+          .then(() => {
+            const localStream = this.rtc.localStream
+            if (localStream) {
+              this.$nextTick(() => {
+                if (!this.chosenStream) {
+                  this.chosenStream = this.rtc.localStream
+                }
+                localStream.play(localStream.id)
+              })
+            }
+          })
+          .catch((err) => {
+            this.$notify.error({
+              title: '发布失败',
+              message: `${err}`
+            })
+          })
       }
     },
     onLeave() {
       this.rtc.leave()
+      this.$router.replace('/')
     },
     onChooseStream: function(stream) {
       this.chosenStream = stream
+    },
+    reloadChosenStream: function(stream) {
+      if (stream && stream === this.chosenStream) {
+        this.$nextTick(() => {
+          this.$refs['display'].srcObject = stream.mediaStream
+        })
+      }
     },
   }
 }
@@ -152,22 +165,6 @@ export default {
       &.right {
         text-align: right;
         transform-origin: 100%;
-      }
-    }
-
-    .box-card {
-      margin: 0 auto;
-      margin-top: 10%;
-      min-width: 480px;
-      max-width: 60%;
-      max-height: 430px;
-
-      .box-body {
-        margin: 0 20px;
-
-        .btn-submit {
-          width: 100%;
-        }
       }
     }
 
@@ -216,6 +213,12 @@ export default {
       padding: 10px;
       line-height: 30px;
       color: #eee;
+
+      .status {
+        margin-left: 20px;
+        padding-left: 20px;
+        border-left: 1px solid #333;
+      }
     }
 
     .menu-bar {

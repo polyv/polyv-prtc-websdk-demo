@@ -1,17 +1,13 @@
 <template>
   <div id="app">
-    <ClassRoom msg="Welcome to WebRTC Demo"/>
+    <router-view></router-view>
   </div>
 </template>
 
 <script>
-import ClassRoom from './components/ClassRoom.vue'
 
 export default {
   name: 'App',
-  components: {
-    ClassRoom
-  }
 }
 </script>
 
